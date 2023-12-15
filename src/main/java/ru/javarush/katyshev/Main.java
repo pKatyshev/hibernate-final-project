@@ -30,40 +30,19 @@ public class Main {
     private final CityDAO cityDAO;
     private final CountryDAO countryDAO;
 
-    public Main() {
-        sessionFactory = prepareRelationDB();
+    public Main(String host) {
+        sessionFactory = prepareRelationDB(host);
         cityDAO = new CityDAO(sessionFactory);
         countryDAO = new CountryDAO(sessionFactory);
 
-        redisClient = prepareRedisClient();
+        redisClient = prepareRedisClient(host);
         mapper = new ObjectMapper();
     }
 
     public static void main(String[] args) {
-        Main main = new Main();
-        List<City> allCities = main.fetchData(main);
-        List<CityCountry> preparedData = main.transformData(allCities);
-        main.pushToRedis(preparedData);
-
-        main.sessionFactory.getCurrentSession().close();
-
-        List<Integer> ids = List.of(3, 2545, 123, 4, 189, 89, 3458, 1189, 10, 102);
-
-        long startRedis = System.currentTimeMillis();
-        main.testRedisData(ids);
-        long stopRedis = System.currentTimeMillis();
-
-        long startMysql = System.currentTimeMillis();
-        main.testMySQLData(ids);
-        long stopMysql = System.currentTimeMillis();
-
-        System.out.printf("%s:\t%d ms\n", "Redis", (stopRedis - startRedis));
-        System.out.printf("%s:\t%d ms\n", "MySQL", (stopMysql - startMysql));
-
-        main.shutdown();
     }
 
-    private void pushToRedis(List<CityCountry> preparedData) {
+    public void pushToRedis(List<CityCountry> preparedData) {
         try (StatefulRedisConnection<String, String> connection = redisClient.connect()) {
             RedisStringCommands<String, String> sync = connection.sync();
             for (CityCountry cityCountry : preparedData) {
@@ -76,7 +55,7 @@ public class Main {
         }
     }
 
-    private void testRedisData(List<Integer> ids) {
+    public void testRedisData(List<Integer> ids) {
         try (StatefulRedisConnection<String, String> connect = redisClient.connect()) {
             RedisStringCommands<String, String> sync = connect.sync();
             for (Integer id : ids) {
@@ -90,7 +69,7 @@ public class Main {
         }
     }
 
-    private void testMySQLData(List<Integer> ids) {
+    public void testMySQLData(List<Integer> ids) {
         try (Session session = sessionFactory.getCurrentSession()){
             session.beginTransaction();
             for (Integer id : ids) {
@@ -101,7 +80,7 @@ public class Main {
         }
     }
 
-    private List<CityCountry> transformData(List<City> allCities) {
+    public List<CityCountry> transformData(List<City> allCities) {
         return allCities.stream().map(city -> {
             CityCountry res = new CityCountry();
             res.setId(city.getId());
@@ -132,7 +111,7 @@ public class Main {
         }).collect(Collectors.toList());
     }
 
-    private List<City> fetchData(Main main) {
+    public List<City> fetchData(Main main) {
         try (Session session = main.sessionFactory.getCurrentSession()) {
             session.getTransaction().begin();
             List<Country> countries = countryDAO.getAll();
@@ -149,16 +128,12 @@ public class Main {
         }
     }
 
-    private SessionFactory prepareRelationDB() {
+    private SessionFactory prepareRelationDB(String host) {
         final SessionFactory sessionFactory;
         Properties properties = new Properties();
         properties.put(Environment.DIALECT, "org.hibernate.dialect.MySQL8Dialect");
         properties.put(Environment.DRIVER, "com.p6spy.engine.spy.P6SpyDriver");
-//        LOCAL_DB
-//        properties.put(Environment.URL, "jdbc:p6spy:mysql://localhost:3306/world");
-
-//        REMOTE_DB
-        properties.put(Environment.URL, "jdbc:p6spy:mysql://192.168.0.245:3306/world");
+        properties.put(Environment.URL, "jdbc:p6spy:mysql://" + host + ":3306/world");
         properties.put(Environment.USER, "root");
         properties.put(Environment.PASS, "root");
         properties.put(Environment.CURRENT_SESSION_CONTEXT_CLASS, "thread");
@@ -172,27 +147,26 @@ public class Main {
                 .addProperties(properties)
                 .buildSessionFactory();
         return sessionFactory;
-
     }
 
-    private RedisClient prepareRedisClient() {
-//        LOCAL_REDIS
-//        RedisClient client = RedisClient.create(RedisURI.create("localhost", 6379));
-
-//        REMOTE_REDIS
-        RedisClient client = RedisClient.create(RedisURI.create("192.168.0.245", 6379));
+    public RedisClient prepareRedisClient(String host) {
+        RedisClient client = RedisClient.create(RedisURI.create(host, 6379));
         try (StatefulRedisConnection<String, String> connection = client.connect()) {
             System.out.println("=".repeat(18) + "\nConnected to Redis\n" + "=".repeat(18));
         }
         return client;
     }
 
-    private void shutdown() {
+    public void shutdown() {
         if (nonNull(sessionFactory)) {
             sessionFactory.close();
         }
         if (nonNull(redisClient)) {
             redisClient.shutdown();
         }
+    }
+
+    public SessionFactory getSessionFactory() {
+        return sessionFactory;
     }
 }
