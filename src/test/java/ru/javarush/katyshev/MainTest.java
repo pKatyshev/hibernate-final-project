@@ -1,13 +1,12 @@
 package ru.javarush.katyshev;
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import ru.javarush.katyshev.entity.City;
 import ru.javarush.katyshev.redis.CityCountry;
 
 import java.util.List;
-
-import static org.junit.Assert.*;
 
 public class MainTest {
     @Test
@@ -41,6 +40,7 @@ public class MainTest {
     }
 
     @Test
+    @Ignore
     public void testRemoteDB(){
         String host = "192.168.0.245";
         Main main = new Main(host);
